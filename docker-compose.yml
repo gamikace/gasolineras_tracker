@@ -1,0 +1,15 @@
+services:
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    ports:
+      - "8191:8191"
+    environment:
+      - LOG_LEVEL=info
+      - CAPTCHA_SOLVER=none
+      - TZ=Europe/Madrid
+      - LANG=es_ES
+    restart: unless-stopped
+    cpus: "1.0"
+    mem_limit: 3g
+    memswap_limit: 3g

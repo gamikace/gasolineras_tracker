@@ -1,0 +1,7 @@
+data/*
+.env
+nohup.out
+__pycache__/
+debug.py
+todo.sty
+cookies.json
