@@ -173,7 +173,7 @@ def format_combined_telegram(
 ) -> str:
     """Telegram: más barata + top gasolineras en un solo mensaje."""
     hoy = date.today().strftime("%d/%m/%Y")
-    lines = [f"⛽ <b>Gasolina {zona} — {hoy}</b>\n"]
+    lines = [f"⛽ <b>#Gasolina {zona} — {hoy}</b>\n"]
 
     # ── Más barata ────────────────────────────────────────────
     lines.append("🏆 <b>Más barata</b>")

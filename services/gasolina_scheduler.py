@@ -45,8 +45,6 @@ async def run_gasolina_daily(ctx) -> None:
     state = _load_state()
     chat_id = str(ADHOC_CHAT_ID if IS_PROD else DEV_CHAT_ID)
 
-    print("entro")
-
     # ── 1. España más barata → X con imagen ──────────────────
     if not _already_sent_today(state, "spain_x"):
         try:

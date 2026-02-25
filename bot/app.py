@@ -18,7 +18,7 @@ def build_app() -> Application:
     madrid = pytz.timezone("Europe/Madrid")
     app.job_queue.run_daily(
         run_gasolina_daily,
-        time=dtime(8, 0, tzinfo=madrid),
+        time=dtime(10, 0, tzinfo=madrid),
         name="gasolina_daily"
     )
 
