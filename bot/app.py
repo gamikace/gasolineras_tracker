@@ -31,7 +31,7 @@ def build_app() -> Application:
     for hour in update_hours:
         app.job_queue.run_daily(
             run_gasolina_update,
-            time=dtime(hour, 0, tzinfo=madrid),
+            time=dtime(hour, 10, tzinfo=madrid),
             name=f"gasolina_update_{hour:02d}",
         )
 
