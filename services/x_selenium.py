@@ -12,14 +12,12 @@ from io import BytesIO
 import json
 import time
 import os
-import logging
 from twitter_text import parse_tweet
 from ai.openrouter import obtener_respuesta_con_reintentos
 import asyncio
 from selenium.common.exceptions import TimeoutException
 from config import IS_PROD
-
-logger = logging.getLogger(__name__)
+from logger import logger
 
 # ✅ Ruta absoluta basada en ubicación del archivo
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -80,14 +78,12 @@ Responde SOLO con el título reescrito ({adjusted_limit} chars máx, sin comilla
             actual_length = len(optimized)
             
             if actual_length <= max_chars:
-                logger.info(f"[X_LLM] ✅ Intento {attempt}/{max_attempts}: '{optimized}' ({actual_length}/{max_chars} chars)")
                 return optimized
             else:
                 logger.warning(f"[X_LLM] ⚠️ Intento {attempt}/{max_attempts}: Excede ({actual_length} > {max_chars})")
                 logger.warning(f"[X_LLM]    Respuesta: '{optimized}'")
                 
                 if attempt < max_attempts:
-                    logger.info(f"[X_LLM] 🔄 Reintentando con límite más estricto ({adjusted_limit - 3} chars)...")
                     continue
                 else:
                     # Último recurso: pedir al LLM que corte aún más
@@ -139,7 +135,6 @@ Máximo {ultra_limit} caracteres:"""
         result = result.strip().strip('"').strip("'").strip()
         
         if len(result) <= max_chars:
-            logger.info(f"[X_LLM_EMERGENCY] ✅ Emergencia exitosa: '{result}' ({len(result)} chars)")
             return result
         else:
             # Si incluso esto falla, cortar manualmente (SIN "...")
@@ -231,7 +226,6 @@ async def format_post_for_x(
     final_text   = title + "\n".join(other_lines) + url_part + hashtags
     final_result = parse_tweet(final_text)
 
-    logger.info(f"[X] Post final: {final_result.weightedLength}/{MAX_LENGTH} chars")
     if not final_result.valid:
         logger.error("[X] ⚠️ Post inválido según twitter-text")
 
@@ -271,7 +265,6 @@ async def optimize_recommendation_for_x(
             result = result.strip().strip('"').strip("'").strip('`').replace('\n', ' ').strip()
 
             if len(result) <= available_chars:
-                logger.info(f"[X_LLM] ✅ Rec ajustada intento {attempt}: '{result}' ({len(result)}/{available_chars})")
                 return result
             else:
                 logger.warning(f"[X_LLM] ⚠️ Intento {attempt}: Excede ({len(result)} > {available_chars})")
@@ -303,9 +296,7 @@ def post_to_x(text: str, image_bytes: bytes = None, headless: bool = True) -> bo
     driver = None
     temp_image_path = None
     
-    try:
-        logger.info("[X] 🔧 Configurando Firefox...")
-        
+    try:     
         # Configurar Firefox
         options = Options()
         options.add_argument("--no-sandbox")
@@ -319,12 +310,10 @@ def post_to_x(text: str, image_bytes: bytes = None, headless: bool = True) -> bo
         wait = WebDriverWait(driver, 30)
         
         # 1️⃣ Abrir X
-        logger.info("[X] 🌐 Abriendo https://x.com...")
         driver.get("https://x.com")
         time.sleep(2)
         
         # 2️⃣ Cargar cookies
-        logger.info("[X] 🍪 Cargando cookies...")
         if not os.path.exists(COOKIES_FILE):
             logger.error(f"[X] ⚠️ Cookies no encontradas en {COOKIES_FILE}")
             return False
@@ -336,10 +325,8 @@ def post_to_x(text: str, image_bytes: bytes = None, headless: bool = True) -> bo
             c.pop("sameSite", None)
             driver.add_cookie(c)
         
-        logger.info(f"[X] ✅ {len(cookies)} cookies cargadas")
         
         # 3️⃣ Ir al home logueado
-        logger.info("[X] 🏠 Navegando a /home...")
         driver.get("https://x.com/home")
         time.sleep(4)
 
@@ -352,7 +339,6 @@ def post_to_x(text: str, image_bytes: bytes = None, headless: bool = True) -> bo
         try:
             close_btns = driver.find_elements(By.CSS_SELECTOR, "[aria-label*='Close'], [aria-label*='Cerrar']")
             if close_btns:
-                logger.info(f"[X] 🔕 Cerrando {len(close_btns)} modals...")
                 for btn in close_btns:
                     if btn.is_displayed():
                         btn.click()
@@ -361,7 +347,6 @@ def post_to_x(text: str, image_bytes: bytes = None, headless: bool = True) -> bo
             pass
         
         # 4️⃣ Detectar textarea del composer
-        logger.info("[X] 🔍 Buscando composer...")
         composer_selectors = [
             "div[data-testid='tweetTextarea_0']",
             "div[data-testid='tweetTextarea_1']",
@@ -375,7 +360,6 @@ def post_to_x(text: str, image_bytes: bytes = None, headless: bool = True) -> bo
                 tweet_box = WebDriverWait(driver, 8).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, selector))
                 )
-                logger.info("[X] ✅ Composer encontrado con selector: %s", selector)
                 break
             except TimeoutException:
                 logger.debug("[X] Composer no encontrado con selector: %s", selector)
@@ -390,15 +374,12 @@ def post_to_x(text: str, image_bytes: bytes = None, headless: bool = True) -> bo
                     tweet_box = WebDriverWait(driver, 8).until(
                         EC.presence_of_element_located((By.CSS_SELECTOR, selector))
                     )
-                    logger.info("[X] ✅ Composer encontrado en /compose/post con selector: %s", selector)
                     break
                 except TimeoutException:
                     logger.debug("[X] Composer no encontrado en /compose/post con selector: %s", selector)
 
         if tweet_box is None:
             raise TimeoutException("No se encontró el composer de X en /home ni /compose/post")
-
-        logger.info("[X] ✅ Composer encontrado")
         
         # Scroll y click
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", tweet_box)
@@ -407,29 +388,21 @@ def post_to_x(text: str, image_bytes: bytes = None, headless: bool = True) -> bo
         time.sleep(1)
         
         # Enviar texto
-        logger.info(f"[X] ⌨️  Escribiendo texto ({len(text)} chars)...")
         tweet_box.send_keys(text)
-        logger.info(f"[X] ✅ Texto insertado: {text[:50]}...")
         
         # 5️⃣ Subir imagen si existe
         if image_bytes:
-            logger.info("[X] 📷 Preparando imagen...")
             temp_image_path = f"/dev/shm/x_temp_{int(time.time())}.jpg"
             
             try:
                 with open(temp_image_path, "wb") as f:
                     f.write(image_bytes)
-                logger.info(f"[X] ✅ Imagen guardada: {len(image_bytes)} bytes")
             except OSError as e:
                 logger.error(f"[X] ❌ Error escribiendo en /dev/shm: {e}")
                 temp_image_path = f"/tmp/x_temp_{int(time.time())}.jpg"
                 with open(temp_image_path, "wb") as f:
                     f.write(image_bytes)
-                logger.info(f"[X] ✅ Imagen guardada en /tmp (fallback)")
-            
-            # ✅ CAMBIO 1: Buscar el input con data-testid específico
-            logger.info("[X] 🔍 Buscando input de archivo con data-testid='fileInput'...")
-            
+                        
             try:
                 # Esperar a que el input esté presente
                 file_input = wait.until(
@@ -437,15 +410,12 @@ def post_to_x(text: str, image_bytes: bytes = None, headless: bool = True) -> bo
                         (By.CSS_SELECTOR, "input[data-testid='fileInput']")
                     )
                 )
-                logger.info("[X] ✅ Input de archivo encontrado")
                 
                 # ✅ CAMBIO 2: NO manipular visibilidad, enviar directamente
                 # X permite send_keys sin hacer el input visible
                 file_input.send_keys(temp_image_path)
-                logger.info("[X] ✅ Ruta de imagen enviada al input")
                 
                 # ✅ CAMBIO 3: Esperar más tiempo y buscar el botón "Eliminar contenido multimedia"
-                logger.info("[X] ⏳ Esperando que X procese la imagen (hasta 30s)...")
                 wait_upload = WebDriverWait(driver, 30)
                 
                 # Buscar el botón de eliminar que aparece cuando la imagen está cargada
@@ -455,7 +425,6 @@ def post_to_x(text: str, image_bytes: bytes = None, headless: bool = True) -> bo
                             (By.CSS_SELECTOR, "button[aria-label*='Eliminar contenido multimedia'], button[aria-label*='Remove media']")
                         )
                     )
-                    logger.info("[X] ✅ Imagen confirmada - botón 'Eliminar' visible")
                     
                 except TimeoutException:
                     # Fallback: buscar por el contenedor de la imagen
@@ -467,7 +436,6 @@ def post_to_x(text: str, image_bytes: bytes = None, headless: bool = True) -> bo
                                 (By.CSS_SELECTOR, "div[data-testid='attachments'] img")
                             )
                         )
-                        logger.info("[X] ✅ Imagen confirmada - preview visible")
                     except TimeoutException:
                         logger.error("[X] ❌ Timeout: la imagen no se cargó en 30s")
                         
@@ -491,21 +459,17 @@ def post_to_x(text: str, image_bytes: bytes = None, headless: bool = True) -> bo
                 return False
 
         # 6️⃣ Publicar
-        logger.info("[X] 🔍 Buscando botón de publicar (tweetButtonInline)...")
         post_btn = wait.until(
             EC.element_to_be_clickable(
                 (By.CSS_SELECTOR, "[data-testid='tweetButtonInline']")
             )
         )
-        logger.info("[X] ✅ Botón encontrado")
         
         # Scroll al botón y click con JS
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", post_btn)
         time.sleep(0.5)
         driver.execute_script("arguments[0].click();", post_btn)
-        
-        logger.info("[X] ✅ Post publicado correctamente")
-        
+                
         time.sleep(3)
         return True
         
@@ -518,7 +482,6 @@ def post_to_x(text: str, image_bytes: bytes = None, headless: bool = True) -> bo
                 driver.save_screenshot("x_error.png")
                 with open("x_error.html", "w", encoding="utf-8") as f:
                     f.write(driver.page_source)
-                logger.info("[X] 🔍 Screenshot y HTML guardados en x_error.*")
             except:
                 pass
         

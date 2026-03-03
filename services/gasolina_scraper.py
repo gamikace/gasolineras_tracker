@@ -28,6 +28,39 @@ def _get_html(url: str) -> str:
     r.raise_for_status()
     return r.text
 
+def _find_top_winners(top_data: dict) -> dict[str, set[str]]:
+    """
+    Devuelve {fuel_type: {station1, station2, ...}} con las gasolineras
+    más baratas por tipo de combustible dentro del top.
+    Soporta empates.
+    """
+    min_prices: dict[str, float] = {}
+    winners: dict[str, set[str]] = {}
+
+    def _parse(price_str: str) -> float:
+        return float(price_str.replace("€", "").replace(",", ".").strip())
+
+    # Primera pasada: encontrar precio mínimo por combustible
+    for station, fuels in top_data.items():
+        for fuel, price_str in fuels.items():
+            try:
+                price = _parse(price_str)
+                if fuel not in min_prices or price < min_prices[fuel]:
+                    min_prices[fuel] = price
+            except ValueError:
+                continue
+
+    # Segunda pasada: marcar ganadores (con soporte de empate)
+    for station, fuels in top_data.items():
+        for fuel, price_str in fuels.items():
+            try:
+                price = _parse(price_str)
+                if fuel in min_prices and price == min_prices[fuel]:
+                    winners.setdefault(fuel, set()).add(station)
+            except ValueError:
+                continue
+
+    return winners
 
 def _parse_cheapest_block(html: str) -> dict[str, dict]:
     """
@@ -116,7 +149,7 @@ async def fetch_top_stations() -> dict[str, dict[str, str]]:
 
 def format_cheapest_telegram(data: dict, zona: str) -> str:
     hoy = date.today().strftime("%d/%m/%Y")
-    lines = [f"⛽ <b>Gasolinera más barata {zona} — {hoy}</b>\n"]
+    lines = [f"⛽ <b>Gasolinera más barata {zona} — {hoy}</b>\n"]  # ← zona, sin hora_str
     for tipo in FUEL_ORDER:
         if tipo not in data:
             continue
@@ -126,7 +159,6 @@ def format_cheapest_telegram(data: dict, zona: str) -> str:
         if d.get("direccion"):
             lines.append(f"  📍 {d['direccion'][:60]}")
     return "\n".join(lines)
-
 
 async def format_cheapest_x(data: dict, zona: str) -> str:
     hoy = date.today().strftime("%d/%m/%Y")
@@ -167,20 +199,29 @@ def format_top4_telegram(data: dict[str, dict]) -> str:
     return "\n".join(lines)
 
 def format_combined_telegram(
-    cheapest_data: dict,
-    top_data: dict,
-    zona: str,
+    zgza_data, top_data, city,
+    updated_at=None, has_changes=False,
+    initial_snapshot=None,
 ) -> str:
-    """Telegram: más barata + top gasolineras en un solo mensaje."""
     hoy = date.today().strftime("%d/%m/%Y")
-    lines = [f"⛽ <b>#Gasolina {zona} — {hoy}</b>\n"]
+
+    # Calcular trofeos dinámicamente
+    winners = _find_top_winners(top_data)
+
+    if updated_at:
+        check = " ✅" if has_changes else ""
+        hora_str = f"({updated_at}{check})"
+    else:
+        hora_str = "(10:00)"
+
+    lines = [f"⛽️ <b>#Gasolina {city} — {hoy} {hora_str}</b>\n"]
 
     # ── Más barata ────────────────────────────────────────────
     lines.append("🏆 <b>Más barata</b>")
     for tipo in FUEL_ORDER:
-        if tipo not in cheapest_data:
+        if tipo not in zgza_data:
             continue
-        d = cheapest_data[tipo]
+        d = zgza_data[tipo]
         lines.append(f"<b>{tipo}</b>: {d['precio']}")
         lines.append(f"  🏪 {d['estacion']}")
         if d.get("direccion"):
@@ -191,11 +232,21 @@ def format_combined_telegram(
     # ── Top gasolineras ───────────────────────────────────────
     lines.append("📋 <b>Top gasolineras</b>")
     for station, fuels in top_data.items():
-        if not fuels:
-            continue
-        lines.append(f"<b>{station}</b>")
-        for tipo in FUEL_ORDER:
-            if tipo in fuels:
-                lines.append(f"  {tipo}: {fuels[tipo]}")
+        lines.append(f"\n⛽ <b>{station}</b>")
+        for fuel in FUEL_ORDER:
+            if fuel not in fuels:
+                continue
+            price = fuels[fuel]
+            # Precio inicial si existe y es diferente
+            initial_price = (initial_snapshot or {}).get("top", {}).get(station, {}).get(fuel)
+            if initial_price and initial_price != price:
+                price_display = f"{initial_price} → <b>{price}</b>"
+            else:
+                price_display = price
+
+            if station in winners.get(fuel, set()):
+                lines.append(f"  🏆 <b>{fuel}: {price_display}</b>")
+            else:
+                lines.append(f"  · {fuel}: {price_display}")
 
     return "\n".join(lines)
