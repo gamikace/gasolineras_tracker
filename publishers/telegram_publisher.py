@@ -1,6 +1,8 @@
 from telegram.error import TelegramError, BadRequest
 from logger import logger
+import asyncio
 
+_pending_pin_tasks: set = set()
 
 async def send_telegram_photo(app, chat_id, thread_id, text, image_path) -> int | None:
     kw = {"message_thread_id": thread_id} if thread_id else {}
@@ -61,3 +63,40 @@ async def edit_or_resend_photo(
     # Reenvío completo
     new_id = await send_telegram_photo(app, chat_id, thread_id, new_text, image_path)
     return new_id
+
+async def pin_telegram_message(app, chat_id, message_id, disable_notification: bool = True) -> bool:
+    """Fija un mensaje en el chat. disable_notification=True evita el aviso al grupo."""
+    try:
+        await app.bot.pin_chat_message(
+            chat_id=chat_id,
+            message_id=message_id,
+            disable_notification=disable_notification,
+        )
+        logger.info(f"[Telegram] 📌 Mensaje {message_id} fijado en chat_id={chat_id}")
+        return True
+    except TelegramError as e:
+        logger.error(f"[Telegram] ❌ Error fijando mensaje {message_id}: {e}")
+        return False
+
+async def _delayed_pin_task(app, chat_id, message_id, delay_seconds: int):
+    """Coroutine interna: espera el delay y ejecuta el pin."""
+    horas = delay_seconds // 3600
+    logger.info(f"[Telegram] ⏳ Pin de message_id={message_id} programado en {horas}h")
+    await asyncio.sleep(delay_seconds)
+    await pin_telegram_message(app, chat_id, message_id)
+
+
+def schedule_delayed_pin(app, chat_id, message_id, delay_hours: int = 3):
+    """
+    Programa el pin de un mensaje tras `delay_hours` horas.
+    No bloquea — lanza un asyncio.Task en segundo plano.
+    Valores válidos sugeridos: 3, 4 o 5 horas.
+    """
+    task = asyncio.create_task(
+        _delayed_pin_task(app, chat_id, message_id, delay_hours * 3600)
+    )
+    # Guardamos referencia para evitar que el GC destruya la task antes de ejecutarse
+    _pending_pin_tasks.add(task)
+    task.add_done_callback(_pending_pin_tasks.discard)
+    logger.info(f"[Telegram] 🕐 Task de pin creada — message_id={message_id}, delay={delay_hours}h")
+    return task

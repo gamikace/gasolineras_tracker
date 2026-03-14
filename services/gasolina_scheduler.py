@@ -4,6 +4,7 @@ import json
 import os
 from datetime import date, datetime
 import pytz
+import random
 
 from logger import logger
 from config import IS_PROD, DEV_CHAT_ID, ADHOC_CHAT_ID
@@ -14,7 +15,7 @@ from services.gasolina_scraper import (
     format_combined_telegram,
     format_cheapest_x,
 )
-from publishers.telegram_publisher import send_telegram_photo, edit_or_resend_photo
+from publishers.telegram_publisher import send_telegram_photo, edit_or_resend_photo, schedule_delayed_pin
 from publishers.x_publisher import send_x_text_with_image, send_x_text
 
 
@@ -113,6 +114,11 @@ async def run_gasolina_daily(ctx) -> None:
                     await send_x_text(text_x)
                 else:
                     logger.info(f"[Gasolina/DEV] X Zaragoza:\n{text_x}")
+
+                # Programar el pin (no bloquea)
+                if msg_id:
+                    delay = random.choice([3, 4, 5])
+                    schedule_delayed_pin(app, chat_id, msg_id, delay_hours=delay)
 
                 _mark_sent(state, "zgza_combined")
 
