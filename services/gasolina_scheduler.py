@@ -17,7 +17,9 @@ from services.gasolina_scraper import (
 )
 from publishers.telegram_publisher import send_telegram_photo, edit_or_resend_photo, schedule_delayed_pin, unpin_telegram_message
 from publishers.x_publisher import send_x_text_with_image, send_x_text
-
+from publishers.telegram_publisher import send_telegram_message
+from services.gasolina_db import init_db, insert_precios_top
+from services.gasolina_stats import obtener_estadisticas_periodo, formato_estadisticas_telegram
 
 STATE_FILE   = "data/gasolina_state.json"
 IMG_ZARAGOZA = "data/image_zaragoza.jpg"
@@ -46,6 +48,9 @@ def _save_state(state: dict) -> None:
 
 def _today() -> str:
     return datetime.now(MADRID_TZ).date().isoformat()
+
+# Inicializar DB
+init_db()
 
 
 def _already_sent_today(state: dict, key: str) -> bool:
@@ -148,6 +153,10 @@ async def run_gasolina_daily(ctx) -> None:
                     state["zgza_last_snapshot"] = serialized
                     state["zgza_initial_snapshot"] = serialized
                     _save_state(state)
+                    
+                # Guardar en base de datos historica
+                insert_precios_top(_today(), top_data)
+                
                 break
             else:
                 logger.warning("[Gasolina/Daily] No hay datos de Zaragoza, no se envía nada hoy.")
@@ -247,6 +256,10 @@ async def run_gasolina_update(ctx) -> None:
 
         _save_state(state)
 
+        # Guardar en base de datos historica si hubo cambios
+        if changed:
+            insert_precios_top(_today(), top_data)
+
     except Exception as e:
         logger.error(f"[Gasolina/Update] Error: {e}", exc_info=True)
 
@@ -262,3 +275,47 @@ def _snapshot_to_render(snapshot: dict, fresh_data: dict) -> dict:
 
 def _snapshot_top_to_render(snapshot: dict, fresh_top: dict) -> dict:
     return fresh_top
+
+# ── Resúmenes Estadísticos ────────────────────────────────────
+
+async def run_gasolina_weekly_summary(ctx) -> None:
+    """Envía el resumen semanal (últimos 7 días)"""
+    app = ctx.application
+    chat_id = ADHOC_CHAT_ID if IS_PROD else DEV_CHAT_ID
+
+    stats = obtener_estadisticas_periodo(dias=7)
+    if not stats:
+        logger.warning("[Gasolina/Semanal] Sin datos para el resumen semanal.")
+        return
+
+    text_tg = formato_estadisticas_telegram(stats, "Semanal")
+
+    try:
+        await send_telegram_message(app, chat_id, None, text_tg)
+        logger.info("[Gasolina/Semanal] ✅ Resumen semanal enviado con éxito.")
+    except Exception as e:
+        logger.error(f"[Gasolina/Semanal] ❌ Error enviando resumen semanal: {e}", exc_info=True)
+
+
+async def run_gasolina_monthly_summary(ctx) -> None:
+    """Envía el resumen mensual (últimos 30 días)"""
+    app = ctx.application
+    chat_id = ADHOC_CHAT_ID if IS_PROD else DEV_CHAT_ID
+
+    # Solo ejecutar el día 1 de cada mes
+    hoy = datetime.now(MADRID_TZ)
+    if hoy.day != 1:
+        return
+
+    stats = obtener_estadisticas_periodo(dias=30)
+    if not stats:
+        logger.warning("[Gasolina/Mensual] Sin datos para el resumen mensual.")
+        return
+
+    text_tg = formato_estadisticas_telegram(stats, "Mensual")
+
+    try:
+        await send_telegram_message(app, chat_id, None, text_tg)
+        logger.info("[Gasolina/Mensual] ✅ Resumen mensual enviado con éxito.")
+    except Exception as e:
+        logger.error(f"[Gasolina/Mensual] ❌ Error enviando resumen mensual: {e}", exc_info=True)

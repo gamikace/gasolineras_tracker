@@ -4,6 +4,21 @@ import asyncio
 
 _pending_pin_tasks: set = set()
 
+async def send_telegram_message(app, chat_id, thread_id, text) -> int | None:
+    kw = {"message_thread_id": thread_id} if thread_id else {}
+    try:
+        msg = await app.bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            parse_mode="HTML",
+            **kw,
+        )
+        logger.info(f"[Telegram] ✅ Mensaje enviado chat_id={chat_id}, message_id={msg.message_id}")
+        return msg.message_id
+    except TelegramError as e:
+        logger.error(f"[Telegram] ❌ Error enviando mensaje: {e}")
+        return None
+
 async def send_telegram_photo(app, chat_id, thread_id, text, image_path) -> int | None:
     kw = {"message_thread_id": thread_id} if thread_id else {}
     try:
