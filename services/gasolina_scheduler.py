@@ -15,7 +15,7 @@ from services.gasolina_scraper import (
     format_combined_telegram,
     format_cheapest_x,
 )
-from publishers.telegram_publisher import send_telegram_photo, edit_or_resend_photo, schedule_delayed_pin
+from publishers.telegram_publisher import send_telegram_photo, edit_or_resend_photo, schedule_delayed_pin, unpin_telegram_message
 from publishers.x_publisher import send_x_text_with_image, send_x_text
 
 
@@ -105,6 +105,11 @@ async def run_gasolina_daily(ctx) -> None:
                 fetch_top_stations(),
             )
             if zgza_data:
+                # Desfijar mensaje del día anterior antes de enviar el nuevo
+                old_msg_id = state.get("zgza_message_id")
+                if old_msg_id:
+                    await unpin_telegram_message(app, chat_id, old_msg_id)
+
                 text_tg = format_combined_telegram(zgza_data, top_data, "Zaragoza")
                 text_x  = await format_cheapest_x(zgza_data, "Zaragoza")
 
