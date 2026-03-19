@@ -64,6 +64,22 @@ async def edit_or_resend_photo(
     new_id = await send_telegram_photo(app, chat_id, thread_id, new_text, image_path)
     return new_id
 
+async def unpin_telegram_message(app, chat_id, message_id) -> bool:
+    """Desfija un mensaje en el chat."""
+    try:
+        await app.bot.unpin_chat_message(
+            chat_id=chat_id,
+            message_id=message_id,
+        )
+        logger.info(f"[Telegram] 📌 Mensaje {message_id} desfijado en chat_id={chat_id}")
+        return True
+    except BadRequest as e:
+        logger.warning(f"[Telegram] ⚠️ No se pudo desfijar {message_id} (puede estar ya desfijado o eliminado): {e}")
+        return False
+    except TelegramError as e:
+        logger.error(f"[Telegram] ❌ Error desfijando mensaje {message_id}: {e}")
+        return False
+
 async def pin_telegram_message(app, chat_id, message_id, disable_notification: bool = True) -> bool:
     """Fija un mensaje en el chat. disable_notification=True evita el aviso al grupo."""
     try:
