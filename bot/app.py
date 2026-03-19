@@ -3,7 +3,7 @@ from telegram import LinkPreviewOptions
 from telegram.ext import Application, ApplicationBuilder, Defaults
 from telegram.request import HTTPXRequest
 from config import API_TOKEN
-from services.gasolina_scheduler import run_gasolina_daily, run_gasolina_update
+from services.gasolina_scheduler import run_gasolina_daily, run_gasolina_update, run_gasolina_weekly_summary, run_gasolina_monthly_summary
 from datetime import time as dtime
 import pytz
 
@@ -34,5 +34,23 @@ def build_app() -> Application:
             time=dtime(hour, 10, tzinfo=madrid),
             name=f"gasolina_update_{hour:02d}",
         )
+
+    # ── Resúmenes Estadísticos ────────────────────────────────
+    # Resumen semanal: Domingos a las 20:00 (days=(6,) en python-telegram-bot, lunes=0, domingo=6)
+    app.job_queue.run_daily(
+        run_gasolina_weekly_summary,
+        time=dtime(20, 0, tzinfo=madrid),
+        days=(6,),
+        name="gasolina_weekly_summary",
+    )
+
+    # Resumen mensual: Día 1 de cada mes a las 08:00
+    # python-telegram-bot run_monthly está disponible en v20+ o ejecutamos daily y filtramos dentro del job
+    # run_gasolina_monthly_summary ya filtra internamente si es día 1, así que lo ejecutamos a diario a las 08:00
+    app.job_queue.run_daily(
+        run_gasolina_monthly_summary,
+        time=dtime(8, 0, tzinfo=madrid),
+        name="gasolina_monthly_summary",
+    )
 
     return app

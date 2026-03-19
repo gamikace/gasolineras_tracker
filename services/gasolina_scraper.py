@@ -5,7 +5,15 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import date
 from logger import logger
-from twitter_text import parse_tweet
+try:
+    from twitter_text import parse_tweet
+except ImportError:
+    def parse_tweet(text):
+        class Dummy:
+            pass
+        d = Dummy()
+        d.weightedLength = len(text)
+        return d
 from services.x_selenium import optimize_recommendation_for_x
 
 UA = "mi-scraper/1.0 (contacto: tu_email@dominio)"

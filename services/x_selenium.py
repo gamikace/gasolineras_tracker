@@ -12,7 +12,15 @@ from io import BytesIO
 import json
 import time
 import os
-from twitter_text import parse_tweet
+try:
+    from twitter_text import parse_tweet
+except ImportError:
+    def parse_tweet(text):
+        class Dummy:
+            pass
+        d = Dummy()
+        d.weightedLength = len(text)
+        return d
 from ai.openrouter import obtener_respuesta_con_reintentos
 import asyncio
 from selenium.common.exceptions import TimeoutException
