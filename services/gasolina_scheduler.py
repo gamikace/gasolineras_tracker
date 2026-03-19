@@ -2,7 +2,7 @@
 import asyncio
 import json
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import pytz
 import random
 
@@ -15,7 +15,7 @@ from services.gasolina_scraper import (
     format_combined_telegram,
     format_cheapest_x,
 )
-from publishers.telegram_publisher import send_telegram_photo, edit_or_resend_photo, schedule_delayed_pin
+from publishers.telegram_publisher import send_telegram_photo, edit_or_resend_photo, schedule_delayed_pin, unpin_telegram_message
 from publishers.x_publisher import send_x_text_with_image, send_x_text
 from publishers.telegram_publisher import send_telegram_message
 from services.gasolina_db import init_db, insert_precios_top
@@ -47,7 +47,7 @@ def _save_state(state: dict) -> None:
         logger.error(f"[Gasolina] ❌ Error guardando estado: {e}")
 
 def _today() -> str:
-    return date.today().isoformat()
+    return datetime.now(MADRID_TZ).date().isoformat()
 
 # Inicializar DB
 init_db()
@@ -89,8 +89,11 @@ async def run_gasolina_daily(ctx) -> None:
     chat_id = ADHOC_CHAT_ID if IS_PROD else DEV_CHAT_ID
 
     # ── 1. España → X con imagen ──────────────────────────────
-    if not _already_sent_today(state, "spain_x"):
+    for attempt in range(1, 4):
+        if _already_sent_today(state, "spain_x"):
+            break
         try:
+            logger.info(f"[Gasolina/Daily] España - Intento {attempt}")
             spain_data = await fetch_spain_cheapest()
             if spain_data:
                 text_x = await format_cheapest_x(spain_data, "España")
@@ -99,17 +102,32 @@ async def run_gasolina_daily(ctx) -> None:
                 else:
                     logger.info(f"[Gasolina/DEV] X España:\n{text_x}")
                 _mark_sent(state, "spain_x")
+                _save_state(state)
+                break
+            else:
+                logger.warning("[Gasolina/Daily] No hay datos de España, no se envía nada hoy.")
+                break # Si no hay datos devueltos, no vale la pena reintentar, quizá el scraper falló al parsear pero no lanzó error.
         except Exception as e:
-            logger.error(f"[Gasolina] Error España: {e}", exc_info=True)
+            logger.error(f"[Gasolina/Daily] Error España (Intento {attempt}): {e}")
+            if attempt < 3:
+                await asyncio.sleep(60 * 5) # 5 minutos de espera entre reintentos
 
     # ── 2. Zaragoza → Telegram (con imagen) + X ───────────────
-    if not _already_sent_today(state, "zgza_combined"):
+    for attempt in range(1, 4):
+        if _already_sent_today(state, "zgza_combined"):
+            break
         try:
+            logger.info(f"[Gasolina/Daily] Zaragoza - Intento {attempt}")
             zgza_data, top_data = await asyncio.gather(
                 fetch_zaragoza_cheapest(),
                 fetch_top_stations(),
             )
             if zgza_data:
+                # Desfijar mensaje del día anterior antes de enviar el nuevo
+                old_msg_id = state.get("zgza_message_id")
+                if old_msg_id:
+                    await unpin_telegram_message(app, chat_id, old_msg_id)
+
                 text_tg = format_combined_telegram(zgza_data, top_data, "Zaragoza")
                 text_x  = await format_cheapest_x(zgza_data, "Zaragoza")
 
@@ -134,12 +152,19 @@ async def run_gasolina_daily(ctx) -> None:
                     serialized = _serialize_data(zgza_data, top_data)
                     state["zgza_last_snapshot"] = serialized
                     state["zgza_initial_snapshot"] = serialized
-
+                    _save_state(state)
+                    
                 # Guardar en base de datos historica
                 insert_precios_top(_today(), top_data)
-
+                
+                break
+            else:
+                logger.warning("[Gasolina/Daily] No hay datos de Zaragoza, no se envía nada hoy.")
+                break # Evitamos bucle si el scraper devuelve null de manera válida
         except Exception as e:
-            logger.error(f"[Gasolina] Error Zaragoza: {e}", exc_info=True)
+            logger.error(f"[Gasolina/Daily] Error Zaragoza (Intento {attempt}): {e}")
+            if attempt < 3:
+                await asyncio.sleep(60 * 5) # 5 minutos de espera entre reintentos
 
     _save_state(state)
 
@@ -161,13 +186,24 @@ async def run_gasolina_update(ctx) -> None:
     last_snapshot = state.get("zgza_last_snapshot", {})
     initial_snapshot = state.get("zgza_initial_snapshot", {})
 
-    # Solo actuar si tenemos un post activo de hoy
-    if not msg_id or msg_date != _today():
-        logger.info("[Gasolina/Update] Sin post activo hoy, nada que editar.")
-        return
-
     now_madrid = datetime.now(MADRID_TZ)
     hora_str   = now_madrid.strftime("%H:%M")
+
+    # El post diario es a las 10:10.
+    # Antes de las 10:00 (por ejemplo en el job de las 00:10 a 09:10), el post válido es el de ayer.
+    # A partir de las 10:00, solo es válido el post de hoy.
+    is_before_10am = now_madrid.hour < 10
+
+    if is_before_10am:
+        # Entre medianoche y las 09:59, se admite un post que se haya publicado ayer.
+        valid_date = (now_madrid - timedelta(days=1)).date().isoformat()
+    else:
+        # A partir de las 10:00, tiene que ser el post de hoy
+        valid_date = _today()
+
+    if not msg_id or msg_date != valid_date:
+        logger.info(f"[Gasolina/Update] Sin post activo de la jornada (esperado={valid_date}, actual={msg_date}), nada que editar.")
+        return
 
     try:
         zgza_data, top_data = await asyncio.gather(
