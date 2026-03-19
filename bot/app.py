@@ -1,12 +1,24 @@
 # bot/app.py
 from telegram import LinkPreviewOptions
-from telegram.ext import Application, ApplicationBuilder, Defaults
+from telegram import Update
+from telegram.ext import Application, ApplicationBuilder, Defaults, ContextTypes
 from telegram.request import HTTPXRequest
+from telegram.error import NetworkError
 from config import API_TOKEN
+from logger import logger
 from services.gasolina_scheduler import run_gasolina_daily, run_gasolina_update
 from datetime import time as dtime
 import pytz
 
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log the Errors, but ignore NetworkError (e.g. Bad Gateway) to reduce noise."""
+    if isinstance(context.error, NetworkError) and "Bad Gateway" in str(context.error):
+        # Ignorar este error específico
+        return
+
+    # Para otros errores, registrar en el log
+    logger.error("Exception while handling an update:", exc_info=context.error)
 
 def build_app() -> Application:
     request = HTTPXRequest(
@@ -34,5 +46,7 @@ def build_app() -> Application:
             time=dtime(hour, 10, tzinfo=madrid),
             name=f"gasolina_update_{hour:02d}",
         )
+
+    app.add_error_handler(error_handler)
 
     return app
