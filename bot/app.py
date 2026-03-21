@@ -12,9 +12,8 @@ import pytz
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Log the Errors, but ignore NetworkError (e.g. Bad Gateway) to reduce noise."""
-    if isinstance(context.error, NetworkError) and "Bad Gateway" in str(context.error):
-        # Ignorar este error específico
+    """Log the Errors, but ignore transient NetworkErrors to reduce noise."""
+    if isinstance(context.error, NetworkError):
         return
 
     # Para otros errores, registrar en el log
