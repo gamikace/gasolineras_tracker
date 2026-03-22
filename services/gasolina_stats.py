@@ -21,8 +21,6 @@ def obtener_estadisticas_periodo(dias: int):
     stats = {
         "picos": {},
         "variacion": {},
-        "mas_barata_tiempo": {},
-        "mas_cara_tiempo": {},
         "dias_baratos": {}
     }
 
@@ -62,40 +60,7 @@ def obtener_estadisticas_periodo(dias: int):
         if row and row['variacion'] is not None and row['variacion'] > 0:
             stats["variacion"][fuel] = {"estacion": row["estacion"], "variacion": round(row["variacion"], 3)}
 
-    # 3. Gasolinera que ha estado más barata/cara durante más tiempo (por combustible)
-    # Contamos cuántos días cada gasolinera tuvo el precio mínimo/máximo diario
-    for fuel in FUEL_ORDER:
-        # Días en los que cada gasolinera fue la más barata
-        c.execute('''
-            SELECT estacion, COUNT(*) as dias_minimo FROM (
-                SELECT date, estacion, MIN(precio) OVER (PARTITION BY date) as min_diario, precio
-                FROM precios_top
-                WHERE tipo_combustible = ? AND date >= ?
-            ) sub WHERE precio = min_diario
-            GROUP BY estacion
-            ORDER BY dias_minimo DESC
-            LIMIT 1
-        ''', (fuel, fecha_inicio))
-        row_min = c.fetchone()
-        if row_min and row_min["dias_minimo"] > 0:
-             stats["mas_barata_tiempo"][fuel] = {"estacion": row_min["estacion"], "dias": row_min["dias_minimo"]}
-
-        # Días en los que cada gasolinera fue la más cara
-        c.execute('''
-            SELECT estacion, COUNT(*) as dias_maximo FROM (
-                SELECT date, estacion, MAX(precio) OVER (PARTITION BY date) as max_diario, precio
-                FROM precios_top
-                WHERE tipo_combustible = ? AND date >= ?
-            ) sub WHERE precio = max_diario
-            GROUP BY estacion
-            ORDER BY dias_maximo DESC
-            LIMIT 1
-        ''', (fuel, fecha_inicio))
-        row_max = c.fetchone()
-        if row_max and row_max["dias_maximo"] > 0:
-             stats["mas_cara_tiempo"][fuel] = {"estacion": row_max["estacion"], "dias": row_max["dias_maximo"]}
-
-    # 4. Día de la semana más barato por combustible
+    # 3. Día de la semana más barato por combustible
     # Promedio del precio mínimo de cada día de la semana
     for fuel in FUEL_ORDER:
         # SQLite: strftime('%w', date) -> 0 (Domingo) - 6 (Sábado)
@@ -154,15 +119,5 @@ def formato_estadisticas_telegram(stats: dict, periodo_nombre: str) -> str:
                  v = stats["variacion"][fuel]
                  lines.append(f"  · <b>{fuel}</b>: {v['estacion']} (varió {v['variacion']}€)")
         lines.append("")
-
-    if stats["mas_barata_tiempo"] or stats["mas_cara_tiempo"]:
-        lines.append("⏳ <b>Récords de Permanencia</b>")
-        for fuel in FUEL_ORDER:
-            if fuel in stats["mas_barata_tiempo"]:
-                 b = stats["mas_barata_tiempo"][fuel]
-                 lines.append(f"  · Más días barata (<b>{fuel}</b>): {b['estacion']} ({b['dias']} días)")
-            if fuel in stats["mas_cara_tiempo"]:
-                 c = stats["mas_cara_tiempo"][fuel]
-                 lines.append(f"  · Más días cara (<b>{fuel}</b>): {c['estacion']} ({c['dias']} días)")
 
     return "\n".join(lines)

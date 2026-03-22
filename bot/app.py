@@ -47,11 +47,11 @@ def build_app() -> Application:
         )
 
     # ── Resúmenes Estadísticos ────────────────────────────────
-    # Resumen semanal: Domingos a las 20:00 (days=(6,) en python-telegram-bot, lunes=0, domingo=6)
+    # Resumen semanal: Domingos a las 20:00 (days=(0,) en python-telegram-bot: 0=domingo, 6=sábado)
     app.job_queue.run_daily(
         run_gasolina_weekly_summary,
         time=dtime(20, 0, tzinfo=madrid),
-        days=(6,),
+        days=(0,),
         name="gasolina_weekly_summary",
     )
 
