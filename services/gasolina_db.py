@@ -18,6 +18,24 @@ def init_db():
             precio REAL
         )
     ''')
+    # Deduplicar filas existentes antes de crear el índice único (migración segura)
+    c.execute('''
+        DELETE FROM precios_top
+        WHERE id NOT IN (
+            SELECT MIN(id) FROM precios_top
+            GROUP BY date, estacion, tipo_combustible
+        )
+    ''')
+    # Índice compuesto para las consultas de estadísticas (filtro por combustible + rango de fechas)
+    c.execute('''
+        CREATE INDEX IF NOT EXISTS idx_precios_fuel_date
+        ON precios_top(tipo_combustible, date)
+    ''')
+    # Índice único para upserts eficientes sin SELECT previo
+    c.execute('''
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_precios_unique
+        ON precios_top(date, estacion, tipo_combustible)
+    ''')
     conn.commit()
     conn.close()
 
@@ -32,29 +50,13 @@ def insert_precios_top(date_str: str, top_data: dict):
     for estacion, fuels in top_data.items():
         for tipo, precio_str in fuels.items():
             try:
-                # Normalizar precio a float
                 precio = float(precio_str.replace("€", "").replace(",", ".").strip())
-
-                # Comprobar si ya existe para esta fecha, estacion y tipo
                 c.execute('''
-                    SELECT id FROM precios_top
-                    WHERE date = ? AND estacion = ? AND tipo_combustible = ?
-                ''', (date_str, estacion, tipo))
-
-                row = c.fetchone()
-                if row:
-                    # Actualizar
-                    c.execute('''
-                        UPDATE precios_top SET precio = ?, timestamp = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                    ''', (precio, row[0]))
-                else:
-                    # Insertar
-                    c.execute('''
-                        INSERT INTO precios_top (date, estacion, tipo_combustible, precio)
-                        VALUES (?, ?, ?, ?)
-                    ''', (date_str, estacion, tipo, precio))
-
+                    INSERT INTO precios_top (date, estacion, tipo_combustible, precio)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(date, estacion, tipo_combustible)
+                    DO UPDATE SET precio = excluded.precio, timestamp = CURRENT_TIMESTAMP
+                ''', (date_str, estacion, tipo, precio))
             except ValueError:
                 continue
 

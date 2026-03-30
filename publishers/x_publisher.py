@@ -28,12 +28,16 @@ async def send_x_text(text: str) -> bool:
     return await _post_x(text, None, text[:30])
 
 async def _post_x(text: str, image_bytes: bytes | None, label: str) -> bool:
-    ok = await asyncio.to_thread(post_to_x, text=text, image_bytes=image_bytes, headless=True)
-    if ok:
-        logger.info(f"[X] ✅ Publicado: {label[:50]}")
-    else:
-        logger.error(f"[X] ❌ Falló publicación: {label[:50]}")
-    return ok
+    for attempt in range(1, 3):
+        ok = await asyncio.to_thread(post_to_x, text=text, image_bytes=image_bytes, headless=True)
+        if ok:
+            logger.info(f"[X] ✅ Publicado: {label[:50]}")
+            return True
+        if attempt < 2:
+            logger.warning(f"[X] ⚠️ Intento {attempt} fallido, reintentando en 2 min...")
+            await asyncio.sleep(120)
+    logger.error(f"[X] ❌ Falló publicación tras 2 intentos: {label[:50]}")
+    return False
 
 def _download_bytes(url: str) -> bytes:
     r = requests.get(url, timeout=30)

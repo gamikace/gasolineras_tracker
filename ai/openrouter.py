@@ -47,7 +47,7 @@ async def obtener_respuesta_con_reintentos(prompt, image_url=None, max_reintento
     Obtiene respuesta con reintentos RÁPIDOS (sin bloquear el bot)
     Solo 2 intentos: inmediato y 3 segundos después
     """
-    tiempos_espera = [0, 5]  # 0s, 3s
+    tiempos_espera = [0, 5]  # 0s, 5s
     for intento, espera in enumerate(tiempos_espera, start=1):
         if espera > 0:
             logger.info(f"⏳ Reintentando en {espera} segundos...")

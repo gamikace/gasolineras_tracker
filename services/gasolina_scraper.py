@@ -101,7 +101,8 @@ def _parse_cheapest_block(html: str) -> dict[str, dict]:
                 "direccion": dir_el.get_text(strip=True) if dir_el else "",
                 "url": "https://preciocombustible.es" + link_el["href"] if link_el else "",
             }
-        except Exception:
+        except Exception as e:
+            logger.warning(f"[Scraper] Error parseando card (cheapest): {e}")
             continue
 
     return results
@@ -126,7 +127,8 @@ def _parse_station_block(html: str) -> dict[str, str]:
             raw  = raw.replace(".", ",")
             precio = raw + " €"
             results[tipo] = precio
-        except Exception:
+        except Exception as e:
+            logger.warning(f"[Scraper] Error parseando card (station): {e}")
             continue
 
     return results
