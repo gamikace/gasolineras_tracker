@@ -49,7 +49,6 @@ async def edit_telegram_caption(app, chat_id, message_id, new_text) -> bool:
             caption=new_text,
             parse_mode="HTML",
         )
-        logger.info(f"[Telegram] ✅ Caption editado message_id={message_id}")
         return True
     except BadRequest as e:
         # Mensaje eliminado o inaccesible — error esperado, no crítico

@@ -223,10 +223,8 @@ async def run_gasolina_update(ctx) -> None:
         changed      = _data_changed(last_snapshot, new_snapshot)
 
         if changed:
-            logger.info(f"[Gasolina/Update] ✅ Precios cambiaron — actualizando caption ({hora_str})")
+            logger.info(f"✅ ({hora_str})")
             state["zgza_last_snapshot"] = new_snapshot
-        else:
-            logger.info(f"[Gasolina/Update] ℹ️ Sin cambios en precios — solo actualizando hora ({hora_str})")
 
         # Siempre regenerar el caption con la hora actualizada
         # (datos frescos si cambiaron, último snapshot si no)
