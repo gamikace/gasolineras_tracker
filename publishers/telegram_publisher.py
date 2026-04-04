@@ -33,8 +33,8 @@ async def send_telegram_photo(app, chat_id, thread_id, text, image_path) -> int 
         logger.info(f"[Telegram] ✅ Foto enviada chat_id={chat_id}, message_id={msg.message_id}")
         return msg.message_id
     except FileNotFoundError:
-        logger.error(f"[Telegram] ❌ Imagen no encontrada: {image_path}")
-        return None
+        logger.warning(f"[Telegram] ⚠️ Imagen no encontrada: {image_path}. Enviando mensaje sin foto.")
+        return await send_telegram_message(app, chat_id, thread_id, text)
     except TelegramError as e:
         logger.error(f"[Telegram] ❌ Error enviando foto: {e}")
         return None

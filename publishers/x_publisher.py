@@ -50,7 +50,7 @@ async def send_x_text_with_image(text: str, image_path: str) -> bool:
         with open(image_path, "rb") as f:
             image_bytes = f.read()
     except FileNotFoundError:
-        logger.error(f"[X] ❌ Imagen no encontrada: {image_path}")
+        logger.warning(f"[X] ⚠️ Imagen no encontrada: {image_path}. Publicando sin imagen.")
         image_bytes = None
 
     return await _post_x(text, image_bytes, text[:30])
