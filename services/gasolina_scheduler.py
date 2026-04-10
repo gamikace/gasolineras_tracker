@@ -3,6 +3,7 @@ import asyncio
 import json
 import os
 from datetime import date, datetime, timedelta
+from typing import List, Tuple
 import pytz
 import random
 
@@ -79,6 +80,35 @@ def _serialize_data(zgza_data: dict, top_data: dict) -> dict:
 def _data_changed(old: dict, new: dict) -> bool:
     """Compara si los precios han cambiado respecto al último snapshot."""
     return old != new
+
+def _snapshot_price_changes(old: dict, new: dict) -> List[Tuple[str, str, str, str]]:
+    """
+    Devuelve cambios detectados como:
+    [(scope, fuel, old_price, new_price), ...]
+    scope: nombre de estacion en top, o "Más barata Zaragoza" para bloque zgza.
+    """
+    changes: List[Tuple[str, str, str, str]] = []
+
+    old_zgza = (old or {}).get("zgza", {})
+    new_zgza = (new or {}).get("zgza", {})
+    for fuel in sorted(set(old_zgza.keys()) | set(new_zgza.keys())):
+        old_price = old_zgza.get(fuel, "N/A")
+        new_price = new_zgza.get(fuel, "N/A")
+        if old_price != new_price:
+            changes.append(("Más barata Zaragoza", fuel, old_price, new_price))
+
+    old_top = (old or {}).get("top", {})
+    new_top = (new or {}).get("top", {})
+    for station in sorted(set(old_top.keys()) | set(new_top.keys())):
+        old_fuels = old_top.get(station, {})
+        new_fuels = new_top.get(station, {})
+        for fuel in sorted(set(old_fuels.keys()) | set(new_fuels.keys())):
+            old_price = old_fuels.get(fuel, "N/A")
+            new_price = new_fuels.get(fuel, "N/A")
+            if old_price != new_price:
+                changes.append((station, fuel, old_price, new_price))
+
+    return changes
 
 
 # ── Job 10:00 — envío diario ──────────────────────────────────
@@ -224,6 +254,10 @@ async def run_gasolina_update(ctx) -> None:
 
         if changed:
             logger.info(f"✅ ({hora_str})")
+            for station, fuel, old_price, new_price in _snapshot_price_changes(last_snapshot, new_snapshot):
+                logger.info(
+                    f"[Gasolina/Update] ✅ ({hora_str}) {station} | {fuel}: {old_price} -> {new_price}"
+                )
             state["zgza_last_snapshot"] = new_snapshot
 
         # Siempre regenerar el caption con la hora actualizada
