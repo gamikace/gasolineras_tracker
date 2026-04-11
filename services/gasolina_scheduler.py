@@ -253,7 +253,6 @@ async def run_gasolina_update(ctx) -> None:
         changed      = _data_changed(last_snapshot, new_snapshot)
 
         if changed:
-            logger.info(f"✅ ({hora_str})")
             for station, fuel, old_price, new_price in _snapshot_price_changes(last_snapshot, new_snapshot):
                 logger.info(
                     f"[Gasolina/Update] ✅ ({hora_str}) {station} | {fuel}: {old_price} -> {new_price}"

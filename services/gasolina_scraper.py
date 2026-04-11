@@ -173,7 +173,7 @@ def format_cheapest_telegram(data: dict, zona: str) -> str:
 async def format_cheapest_x(data: dict, zona: str) -> str:
     hoy = date.today().strftime("%d/%m/%Y")
     header = f"⛽ Gasolinera más barata {zona} — {hoy}"
-    hashtags = "\n\n#gasolina #chollos #ofertas"
+    hashtags = f"\n\n#gasolina #chollos #ofertas #{zona}"
 
     # Construir líneas de combustible
     fuel_lines = []
