@@ -222,7 +222,7 @@ def format_combined_telegram(
         check = " ✅" if has_changes else ""
         hora_str = f"({updated_at}{check})"
     else:
-        hora_str = "(10:05)"
+        hora_str = "(10:10)"
 
     lines = [f"⛽️ <b>#Gasolina {city} — {hoy} {hora_str}</b>\n"]
 
