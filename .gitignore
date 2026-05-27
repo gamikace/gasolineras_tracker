@@ -5,3 +5,5 @@ __pycache__/
 debug.py
 todo.sty
 cookies.json
+*.pid
+*.log

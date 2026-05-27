@@ -7,7 +7,7 @@ rm -f gasolineras_tracker.log
 
 # 2) Lanzar gasolineras_tracker
 nohup python -u gasolineras_tracker.py >> gasolineras_tracker.log 2>&1 &
-echo $! > create_oci_instance_marseille.pid
+echo $! > gasolineras_tracker.pid
 
 # 3) Verificar PIDs
 ps -fp "$(cat gasolineras_tracker.pid)"
