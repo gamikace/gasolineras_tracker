@@ -51,8 +51,13 @@ async def edit_telegram_caption(app, chat_id, message_id, new_text) -> bool:
         )
         return True
     except BadRequest as e:
+        error_text = str(e).lower()
+        if "message is not modified" in error_text:
+            logger.info(f"[Telegram] ℹ️ Mensaje {message_id} sin cambios; se mantiene el message_id actual.")
+            return True
+
         # Mensaje eliminado o inaccesible — error esperado, no crítico
-        logger.warning(f"[Telegram] ⚠️ Mensaje {message_id} no encontrado: {e}")
+        logger.warning(f"[Telegram] ⚠️ Mensaje {message_id} no encontrado o inaccesible: {e}")
         return False
     except TelegramError as e:
         logger.error(f"[Telegram] ❌ Error editando caption: {e}")
