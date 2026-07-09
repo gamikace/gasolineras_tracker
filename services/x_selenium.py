@@ -165,7 +165,6 @@ def merchant_badge_for_x(merchant: str | None) -> str | None:
     mapping = {
         "amazon": "Amazon",
         "aliexpress": "AliExpress",
-        "pccomponentes": "PcComp",
         "steam": "Steam",
         "epicgames": "EpicGames",
     }
